@@ -356,7 +356,6 @@ function DocumentPreview({ data, settings, onMarkPaid, onRecordPayment }: { data
       <section className="doc-totals"><div className="totals-rows"><div><span>Subtotal</span><b>{money(subtotal)}</b></div><div><span>Discount</span><b>{money(Number(doc.discount || 0))}</b></div><div><span>Tax ({settings?.default_tax || 0}%)</span><b>{money(tax)}</b></div><div className="grand-row"><span>Grand total</span><strong>{money(grand)}</strong></div>{type === 'invoice' && <><div><span>Amount paid</span><b>{money(Number(doc.amount_paid || 0))}</b></div><div className="balance-row"><span>Balance due</span><strong>{money(balance)}</strong></div></>}</div></section>
       {doc.notes && <section className="doc-notes"><span className="doc-label">Notes & terms</span><p>{doc.notes}</p></section>}
       {type === 'quotation' && <section className="doc-quote-note"><p>Note:</p><p>1. The rate allow by next 24 month.</p><p>2. Weekly provision provided by owner for labor and other expenses.</p><p>3. Electrical provision by owner.</p></section>}
-      <footer className="doc-footer"><p>{settings?.default_footer || 'Thank you for choosing us.'}</p><small>{settings?.trust_text || '30 years of plumbing trust'}</small></footer>
     </div></div>;
 }
 const attendanceDays = [

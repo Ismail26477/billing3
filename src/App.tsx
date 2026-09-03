@@ -454,12 +454,18 @@ function downloadWeekExcel(labourer: LabourerWithPayments, weekEnding: string) {
   const status = payment?.payment_status || 'Unpaid';
   const paid = payment ? Number(payment.amount_paid || 0) : 0;
   const bal = payment ? Number(payment.balance || 0) : earned;
+  const weekPlan = computeWeekPayable(labourer, earned);
+  const stats = workerStats(labourer);
+  const allAdvances = [...labourer.advances].sort((a, b) => (a.given_date < b.given_date ? -1 : 1));
+  const pendingAdvanceTotal = allAdvances.reduce((sum, a) => sum + Number(a.amount_remaining || 0), 0);
 
   const aoa: (string | number)[][] = [];
   aoa.push([`${labourer.name} — Week Report`]);
   aoa.push([`Role: ${labourer.role || 'Worker'}`, `Daily Wage: ${money(Number(labourer.daily_wage || 0))}`, `Phone: ${labourer.phone || '—'}`]);
   aoa.push([`Week: ${weekRangeLabel(weekEnding)}`]);
   aoa.push([]);
+
+  aoa.push(['ATTENDANCE']);
   aoa.push(['Day', 'Present?', 'Incentive', 'Site Location']);
   for (const [key, label] of attendanceDays) {
     const isPresent = att[key];
@@ -468,16 +474,52 @@ function downloadWeekExcel(labourer: LabourerWithPayments, weekEnding: string) {
     aoa.push([label, isPresent ? 'Present' : 'Absent', isPresent ? inc : '', isPresent ? (site || '') : '']);
   }
   aoa.push([]);
+
+  aoa.push(['EARNINGS']);
   aoa.push(['Days Present', daysPresent]);
   aoa.push(['Daily Wage', Number(labourer.daily_wage || 0)]);
   aoa.push(['Total Incentives', totalIncentive]);
-  aoa.push(['Earned This Week', earned]);
+  aoa.push(['Gross Earned', earned]);
+  aoa.push([]);
+
+  aoa.push(['ADVANCE RECOVERY (this week)']);
+  if (weekPlan.toRecover > 0) {
+    aoa.push(['Advance Recovered', weekPlan.toRecover]);
+    for (const { advance, take } of weekPlan.plan) {
+      aoa.push([`  From advance ${dateLabel(advance.given_date)} (${money(advance.amount)})`, take]);
+    }
+  } else {
+    aoa.push(['Advance Recovered', 0]);
+  }
+  aoa.push(['Net Payable (after advance deduction)', weekPlan.netPayable]);
+  aoa.push([]);
+
+  aoa.push(['PAYMENT']);
   aoa.push(['Payment Status', status]);
   aoa.push(['Amount Paid', paid]);
   aoa.push(['Balance Due', bal]);
+  if (payment?.notes) aoa.push(['Notes', payment.notes]);
+  aoa.push([]);
+
+  if (allAdvances.length > 0) {
+    aoa.push(['ALL CASH ADVANCES']);
+    aoa.push(['Date Given', 'Amount', 'Recovered', 'Pending', 'Note']);
+    for (const adv of allAdvances) {
+      const recovered = Number(adv.amount) - Number(adv.amount_remaining);
+      aoa.push([dateLabel(adv.given_date), Number(adv.amount), recovered, Number(adv.amount_remaining), adv.note || '']);
+    }
+    aoa.push(['Total Pending Advances', pendingAdvanceTotal]);
+    aoa.push([]);
+  }
+
+  aoa.push(['WORKER SUMMARY']);
+  aoa.push(['Days worked this year', stats.yearDays]);
+  aoa.push(['Days worked this month', stats.monthDays]);
+  aoa.push(['Total paid (all weeks)', stats.paidTotal]);
+  aoa.push(['Total unpaid (all weeks)', stats.unpaidTotal]);
 
   const ws = XLSX.utils.aoa_to_sheet(aoa);
-  ws['!cols'] = [{ wch: 20 }, { wch: 14 }, { wch: 14 }, { wch: 28 }];
+  ws['!cols'] = [{ wch: 32 }, { wch: 16 }, { wch: 16 }, { wch: 28 }];
   XLSX.utils.book_append_sheet(wb, ws, 'Week Report');
 
   const end = new Date(`${weekEnding}T12:00:00`);
@@ -669,6 +711,8 @@ function LabourerDetail({ labourer, weekEnding, setWeekEnding, currentAttendance
   const pendingAdvanceTotal = labourer.advances.reduce((sum, a) => sum + Number(a.amount_remaining || 0), 0);
   const dueTotal = labourer.payments.reduce((sum, p) => sum + Number(p.balance || 0), 0);
   const paidTotal = labourer.payments.reduce((sum, p) => sum + Number(p.amount_paid || 0), 0);
+  const stats = workerStats(labourer);
+  const monthLabel = new Date().toLocaleDateString('en-IN', { month: 'short' });
 
   function submitAdvance(e: React.FormEvent) {
     e.preventDefault();
@@ -685,7 +729,9 @@ function LabourerDetail({ labourer, weekEnding, setWeekEnding, currentAttendance
   return <div className="labourer-detail">
     <div className="ld-header"><div className="person-cell"><div className="person-avatar large"><HardHat size={22} /></div><div><h3>{labourer.name}</h3><small>{labourer.role ? `${labourer.role} · ` : ''}{money(labourer.daily_wage)}/day{labourer.phone ? ` · ${labourer.phone}` : ''}</small></div></div><div className="ld-header-actions"><button className="icon-button danger" onClick={() => void onDeleteLabourer(labourer)}><Trash2 size={16} /></button></div></div>
 
-    <div className="ld-strip ld-strip-2">
+    <div className="ld-strip ld-strip-4">
+      <div className="ld-strip-item"><span>Days worked in {new Date().getFullYear()}</span><strong>{stats.yearDays}</strong></div>
+      <div className="ld-strip-item"><span>Days in {monthLabel}</span><strong>{stats.monthDays}</strong></div>
       <div className="ld-strip-item"><span>Total paid</span><strong className="positive">{money(paidTotal)}</strong></div>
       <div className="ld-strip-item"><span>{dueTotal > 0 ? 'To pay' : 'All settled'}</span><strong className={dueTotal > 0 ? 'warning-text' : 'positive'}>{dueTotal > 0 ? money(dueTotal) : '₹0'}</strong></div>
     </div>
